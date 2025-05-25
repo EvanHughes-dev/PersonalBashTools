@@ -109,24 +109,34 @@ for i in 3 4 5; do
     printf -v fullMAC[$i] "%02X" $(( RANDOM % 256 ))
 done
 
-if [[ ! $mode_reconnect]]; then
+if [[ ! $mode_reconnect ]]; then
 	# Prompt for network name
 	read -r -p "What network would you like to connect to? " connection
-else if [[ -n "$current_wifi"  ]]
+elif [[ -n "$current_wifi"  ]]; then
 	# Reconnect to the same network
 	connection="$current_wifi" 
 else
 	read -r -p "You are not currently connected to a network. What network would you like to connect to? " connection
 fi
 
+# Ask for password
+read -s -p "Enter Wi-Fi password for '$connection': " password
+echo
+
 if [[ -n "$current_wifi"  ]]; then
 	nmcli connection down "$connection"
 fi
 
-echo "Connecting to '$connection' with MAC: ${fullMAC[0]}:${fullMAC[1]}:${fullMAC[2]}:${fullMAC[3]}:${fullMAC[4]}:${fullMAC[5]}"
+# Generate MAC string
+mac=$(printf "%02X:%02X:%02X:%02X:%02X:%02X" \
+  $(( 0x${fullMAC[0]} )) $(( 0x${fullMAC[1]} )) $(( 0x${fullMAC[2]} )) \
+  $(( 0x${fullMAC[3]} )) $(( 0x${fullMAC[4]} )) $(( 0x${fullMAC[5]} )))
+echo "Connecting to '$connection' with MAC: $mac"
 
-nmcli device wifi connect "$connection" password "$password" name 
+nmcli connection delete "spoofed-$connection" 2>/dev/null || true
+# Create or modify connection
+nmcli device wifi connect "$connection" password "$password" name "spoofed-$connection"
+nmcli connection modify "spoofed-$connection" 802-11-wireless.cloned-mac-address "$mac"
 
-# Example using nmcli (you’ll need sudo):
-# sudo nmcli connection modify "$connection" 802-3-ethernet.mac-address "${fullMAC[*]// /:}"
-# sudo nmcli connection up   "$connection"
+# Reconnect
+nmcli connection up "spoofed-$connection"
